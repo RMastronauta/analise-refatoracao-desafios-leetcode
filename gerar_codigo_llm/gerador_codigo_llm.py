@@ -1,21 +1,13 @@
 import os
 import sys
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from openai import OpenAI
-from google import genai as google_genai
-from dotenv import load_dotenv
 
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_path not in sys.path:
     sys.path.append(root_path)
+from gerar_codigo_llm.llm_request import LLMRequester
 from repository.repository import close_db_connection, insert_into_table, select_into_table
 
-load_dotenv()
-
-# Configurações de Conexão
-client_google = google_genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-client_openai = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-client_groq = OpenAI(api_key=os.getenv('GROQ_API_KEY'), base_url="https://api.groq.com/openai/v1")
 
 def validar_codigo_python(codigo):
     """Verifica se a resposta realmente parece um código funcional"""
@@ -42,43 +34,28 @@ def solicitar_codigo_llm(modelo_nome, prompt_corpo):
     para o @retry tentar novamente (até 5 vezes com espera exponencial).
     """
     codigo_bruto = ""
-    if "Gemini" in modelo_nome:
+    if "Gemini" == modelo_nome:
+        return ""
         id_tecnico = "gemini-3-flash-preview"
-    elif "Gemma" in modelo_nome:
-        id_tecnico = "gemma-2-9b-it" # ou gemma-7b
-    elif "GPT" in modelo_nome:
-        id_tecnico = "gpt-3.5-turbo"
-    elif "LLAMA" in modelo_nome:
-        id_tecnico = "llama-3.1-70b-versatile"
+    elif "deepseek" == modelo_nome:
+        id_tecnico = "deepseek-v3.2:cloud"
+    elif "GPT" == modelo_nome:
+        id_tecnico = "gpt-oss-safeguard:latest"
+    elif "LLAMA" == modelo_nome:
+        id_tecnico = "compcj/llama4-scout-ud-q2-k-xl:latest"
     else:
         id_tecnico = modelo_nome # fallback
-
+    
+    llm_request =LLMRequester() 
     # 1. Roteamento por Modelo
-    if "Gemini" in modelo_nome or "Gemma" in modelo_nome:
-        response = client_google.models.generate_content(
-            model=id_tecnico,
-            contents=prompt_corpo,
-        )
-        codigo_bruto = response.text
-        
-    elif "GPT" in modelo_nome:
-        response = client_openai.chat.completions.create(
-            model=id_tecnico,
-            messages=[{"role": "user", "content": prompt_corpo}]
-        )
-        codigo_bruto = response.choices[0].message.content
-
-    elif "LLAMA" in modelo_nome:
-        # Exemplo via Groq/OpenRouter/Ollama
-        response = client_groq.chat.completions.create(
-            model=id_tecnico,
-            messages=[{"role": "user", "content": prompt_corpo}]
-        )
-        codigo_bruto = response.choices[0].message.content
+    if "gemini" in modelo_nome:
+        codigo_bruto = llm_request.request_gemini(id_tecnico, prompt_corpo)
+    else: # GPT, LLAMA e GROQ
+        codigo_bruto = llm_request.request_llama(id_tecnico, prompt_corpo)
 
     # 2. Extração e Limpeza
     codigo_limpo = extrair_codigo(codigo_bruto)
-
+    print(f"[{modelo_nome}] Código bruto:\n{codigo_bruto}\n")
     # 3. Defensiva: Validação de Conteúdo
     if not validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
         print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
