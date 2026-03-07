@@ -1,102 +1,97 @@
 import os
 import sys
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_path not in sys.path:
     sys.path.append(root_path)
+from repository.repository import Repository
+from enums.llm import llm 
+from enums.tipo_codigo import TipoCodigo
 from gerar_codigo_llm.llm_request import LLMRequester
-from repository.repository import close_db_connection, insert_into_table, select_into_table
 
 
-def validar_codigo_python(codigo):
-    """Verifica se a resposta realmente parece um código funcional"""
-    indicadores = ['def ', 'class ', 'import ', 'return ', ' = ']
-    # Se não houver nenhum desses termos, a IA provavelmente enviou apenas texto
-    return any(term in codigo for term in indicadores)
+class gerador_codigo_llm:
 
-def extrair_codigo(texto):
-    """Limpa o Markdown e retorna apenas o conteúdo do bloco de código"""
-    if "```python" in texto:
-        return texto.split("```python")[1].split("```")[0].strip()
-    elif "```" in texto:
-        return texto.split("```")[1].split("```")[0].strip()
-    return texto.strip()
+    def __init__(self):
+        self.llm_request = LLMRequester()
+        self.repostitory = Repository()
 
-@retry(
-    stop=stop_after_attempt(5), 
-    wait=wait_exponential(multiplier=1, min=4, max=10),
-    retry=retry_if_exception_type(Exception)
-)
-def solicitar_codigo_llm(modelo_nome, prompt_corpo):
-    """
-    Tenta gerar o código. Se a validação falhar, levanta exceção 
-    para o @retry tentar novamente (até 5 vezes com espera exponencial).
-    """
-    codigo_bruto = ""
-    if "Gemini" == modelo_nome:
-        return ""
-        id_tecnico = "gemini-3-flash-preview"
-    elif "deepseek" == modelo_nome:
-        id_tecnico = "deepseek-v3.2:cloud"
-    elif "GPT" == modelo_nome:
-        id_tecnico = "gpt-oss-safeguard:latest"
-    elif "LLAMA" == modelo_nome:
-        id_tecnico = "compcj/llama4-scout-ud-q2-k-xl:latest"
-    else:
-        id_tecnico = modelo_nome # fallback
-    
-    llm_request =LLMRequester() 
-    # 1. Roteamento por Modelo
-    if "gemini" in modelo_nome:
-        codigo_bruto = llm_request.request_gemini(id_tecnico, prompt_corpo)
-    else: # GPT, LLAMA e GROQ
-        codigo_bruto = llm_request.request_llama(id_tecnico, prompt_corpo)
+    def validar_codigo_python(self, codigo):
+        """Verifica se a resposta realmente parece um código funcional"""
+        indicadores = ['def ', 'class ', 'import ', 'return ', ' = ']
+        # Se não houver nenhum desses termos, a IA provavelmente enviou apenas texto
+        return any(term in codigo for term in indicadores)
 
-    # 2. Extração e Limpeza
-    codigo_limpo = extrair_codigo(codigo_bruto)
-    print(f"[{modelo_nome}] Código bruto:\n{codigo_bruto}\n")
-    # 3. Defensiva: Validação de Conteúdo
-    if not validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
-        print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
-        raise ValueError("A IA não gerou um código Python válido.")
+    def extrair_codigo(self, texto):
+        """Limpa o Markdown e retorna apenas o conteúdo do bloco de código"""
+        if "```python" in texto:
+            return texto.split("```python")[1].split("```")[0].strip()
+        elif "```" in texto:
+            return texto.split("```")[1].split("```")[0].strip()
+        return texto.strip()
 
-    return codigo_limpo
+    @retry(
+        stop=stop_after_attempt(5), 
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception)
+    )
+    def solicitar_codigo_llm(self, modelo_nome, prompt_corpo):
+        """
+        Tenta gerar o código. Se a validação falhar, levanta exceção 
+        para o @retry tentar novamente (até 5 vezes com espera exponencial).
+        """
+        codigo_bruto = ""
+        id_tecnico = llm[modelo_nome.upper()].value
 
-def processar_desafios():
+        llm_request =LLMRequester() 
 
-    # 1. Busca os desafios e os modelos
-    desafios = select_into_table(table_name= "desafios", campos=["id_desafio", "enunciado AS descricao"], size=1)
-    modelos = select_into_table(table_name = "modelos", campos=["id_modelo", "nome_modelo"], size=4)
+        if llm.GEMINI.value in id_tecnico:
+            codigo_bruto = llm_request.request_gemini(id_tecnico, prompt_corpo)
+        else:
+            codigo_bruto = llm_request.request_llama(id_tecnico, prompt_corpo)
 
-    for desafio in desafios:
-        for modelo in modelos:
-            print(f"Processando Desafio {desafio['id_desafio']} com {modelo['nome_modelo']}...")
-            
-            prompt = (
-                "Você é um engenheiro de software sênior. "
-                "Resolva o desafio do LeetCode abaixo estritamente em Python 3. "
-                "Retorne APENAS o código fonte dentro de um bloco de código Markdown. "
-                "O código deve ser autoexevutavel, sem dependências externas, e conter a função principal de solução. "
-                "Não inclua explicações, exemplos de uso ou comentários fora do código.\n\n"
-                f"DESAFIO: {desafio['descricao']}"
+        # 2. Extração e Limpeza
+        codigo_limpo = self.extrair_codigo(codigo_bruto)
+        print(f"[{modelo_nome}] Código bruto:\n{codigo_bruto}\n")
+        
+        # 3. Defensiva: Validação de Conteúdo
+        if not self.validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
+            print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
+            raise ValueError("A IA não gerou um código Python válido.")
+
+        return codigo_limpo
+
+    def ModeloJaProcessado(self, id_desafio, id_modelo, tipo_codigo):
+        """Verifica se já existe um resultado para esse desafio e modelo"""
+        resultados = self.repostitory.select_into_table(
+            table_name='resultados', 
+            campos=['codigo_fonte'], 
+            data={'id_desafio': id_desafio, 'id_modelo': id_modelo, 'tipo': tipo_codigo},
+            size=1
+        )
+        return len(resultados) > 0 and resultados[0]['codigo_fonte'] is not None and self.validar_codigo_python(resultados[0]['codigo_fonte'])
+
+    def GetPrompt(self, descricao, tipo_codigo):
+        """Gera o prompt específico para o tipo de código solicitado"""
+        if tipo_codigo == TipoCodigo.BASELINE:
+            return (
+                "Você é um programador Python especialista em resolver desafios de algoritmos e"
+                "estruturas de dados. Resolva o seguinte desafio de programação:\n\n"
+                f"DESAFIO: {descricao} \n\n"
+                "Instruções para a saída:\n"
+                "Forneça uma solução completa em Python.\n"
+                "Não inclua explicações, comentários introdutórios ou texto adicional.\n"
+                "Sua resposta deve conter APENAS o código-fonte Python e nada mais.\n"
             )
-            
-            try:
-                codigo_gerado = solicitar_codigo_llm(modelo['nome_modelo'], prompt)
+        elif tipo_codigo == TipoCodigo.REFATORADO:
+            return (
+                "Você é um engenheiro de software sênior especializado em clean code, padrões de projeto e refatoração de software. "
+                "Analise o código Python abaixo, que é uma solução para um desafio de algoritmos. "
+                "Seu objetivo é refatorar este código para melhorar sua qualidade. \n"
+                F"Código para refatorar: \n {descricao}\n\n"
+                "Instruções para a saída:\n"
+                "Forneça uma solução completa em Python.\n"
+                "Não inclua explicações, comentários introdutórios ou texto adicional.\n"
+                "Sua resposta deve conter APENAS o código-fonte Python e nada mais.\n"
+            )
 
-                novo_resultado = {
-                    'id_desafio': desafio['id_desafio'],
-                    'id_modelo': modelo['id_modelo'],
-                    'tipo': 'baseline',
-                    'codigo_fonte': codigo_gerado
-                }
-                insert_into_table('resultados', novo_resultado)
-                
-            except Exception as e:
-                print(f"Falha crítica após retentativas no desafio {desafio['id_desafio']}: {e}")
-                
-
-if __name__ == "__main__":
-    processar_desafios()
-    close_db_connection()
