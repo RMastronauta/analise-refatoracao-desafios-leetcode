@@ -16,8 +16,10 @@ class LLMRequester():
             model=llm_model,
             messages=[{"role": "user", "content": prompt}]
         )
-        print(f"Resposta bruta do modelo {llm_model}:\n{response}\n")
-        return response['message']['content']
+        conteudo = response.get('message', {}).get('content', '')
+        if not conteudo or conteudo.strip() == "":
+            conteudo = response.get('message', {}).get('thinking', '')
+        return conteudo
 
 
     def request_gemini(self,llm_model, prompt):

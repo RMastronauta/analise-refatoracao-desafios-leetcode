@@ -2,6 +2,8 @@ import os
 import mysql.connector
 from dotenv import load_dotenv
 
+from entity.resultado import Resultado
+
 
 class Repository():
     def __init__(self):
@@ -106,4 +108,22 @@ class Repository():
             self.conn.rollback()
         finally:
             cursor.close()
+
+    def insert_resultados(self, resultados: list[Resultado]):
+        self.get_connection()
+        cursor = self.conn.cursor()
+        
+        try:
+            for resultado in resultados:
+                sql = f"INSERT INTO resultados (id_desafio, id_modelo, tipo, codigo_fonte, linguagem) VALUES (%s, %s, %s, %s, %s)"
+                values = (resultado.id_desafio, resultado.id_modelo, resultado.tipo, resultado.codigo_fonte, resultado.linguagem)
+                cursor.execute(sql, values)
             
+            self.conn.commit()
+            print(f"✅ Inseridos {len(resultados)} resultados na tabela 'resultados'")
+            
+        except mysql.connector.Error as err:
+            print(f"❌ Erro ao inserir resultados: {err}")
+            self.conn.rollback()
+        finally:
+            cursor.close()

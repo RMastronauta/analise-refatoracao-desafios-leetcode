@@ -24,6 +24,7 @@ CREATE TABLE resultados (
     id_desafio INT,
     id_modelo INT,
     tipo ENUM('baseline', 'refatorado') NOT NULL,
+    linguagem ENUM('python', 'java') NOT NULL,
     codigo_fonte MEDIUMTEXT, 
     
     -- Métricas do SonarQube
@@ -41,7 +42,7 @@ CREATE TABLE resultados (
 
 -- Inserção inicial dos modelos
 INSERT INTO modelos (nome_modelo) VALUES 
-('Google Gemini'), 
-('GPT-3.5-Turbo'), 
-('LLAMA 4'), 
-('Gemma 3');
+('GEMINI'), 
+('GEMMA'), 
+('LLAMA'), 
+('DEEPSEEK');

@@ -7,6 +7,7 @@ import requests
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_path not in sys.path:
     sys.path.append(root_path)
+from enums.lingagem import Linguagem
 from gerar_codigo_llm.llm_request import LLMRequester
 from repository.repository import Repository
 
@@ -54,9 +55,13 @@ class executa_sonarqube:
         self.repository.update_table(table_name='resultados', data=metricas_db, conditions={'id_resultado': id_resultado})
     
     def process_sonar(self):
-        resultados = self.repository.select_into_table(table_name= "resultados", campos=["id_resultado", "codigo_fonte"])
+        resultados = self.repository.select_into_table(table_name= "resultados", campos=["id_resultado", "codigo_fonte", "linguagem"], data={'loc': 0})
         for resultado in resultados:
-            file_path = f"temp_code_{resultado['id_resultado']}.py"
+            if resultado['linguagem'] in Linguagem.PYTHON.value:
+                file_path = f"temp_code_{resultado['id_resultado']}.py"
+            elif resultado['linguagem'] in Linguagem.JAVA.value:
+                file_path = f"temp_code_{resultado['id_resultado']}.java"
+
             with open(file_path, 'w') as f:
                 f.write(resultado['codigo_fonte'])
             

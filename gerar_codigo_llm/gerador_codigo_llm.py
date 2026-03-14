@@ -4,6 +4,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_path not in sys.path:
     sys.path.append(root_path)
+from enums.lingagem import Linguagem
 from repository.repository import Repository
 from enums.llm import llm 
 from enums.tipo_codigo import TipoCodigo
@@ -29,13 +30,28 @@ class gerador_codigo_llm:
         elif "```" in texto:
             return texto.split("```")[1].split("```")[0].strip()
         return texto.strip()
+    def validar_codigo_java(self, codigo):
+        """Verifica se a resposta realmente parece um código Java funcional"""
+        indicadores = [
+            'public class ', 'private ', 'protected ', 
+            'static void main', 'import java.', 
+            'System.out.print', 'new ', ';', '{'
+        ]
+        return any(term in codigo for term in indicadores)
 
+    def extrair_codigo_java(self, texto):
+        """Limpa o Markdown e retorna apenas o conteúdo do bloco de código Java"""
+        if "```java" in texto:
+            return texto.split("```java")[1].split("```")[0].strip()
+        elif "```" in texto:
+            return texto.split("```")[1].split("```")[0].strip()
+        return texto.strip()
     @retry(
         stop=stop_after_attempt(5), 
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type(Exception)
     )
-    def solicitar_codigo_llm(self, modelo_nome, prompt_corpo):
+    def solicitar_codigo_llm(self, modelo_nome, prompt_corpo, linguagem):
         """
         Tenta gerar o código. Se a validação falhar, levanta exceção 
         para o @retry tentar novamente (até 5 vezes com espera exponencial).
@@ -51,47 +67,72 @@ class gerador_codigo_llm:
             codigo_bruto = llm_request.request_llama(id_tecnico, prompt_corpo)
 
         # 2. Extração e Limpeza
-        codigo_limpo = self.extrair_codigo(codigo_bruto)
+        if Linguagem.PYTHON.value in linguagem:
+            codigo_limpo = self.extrair_codigo(codigo_bruto)
+        elif Linguagem.JAVA.value in linguagem:
+            codigo_limpo = self.extrair_codigo_java(codigo_bruto)
+            
         print(f"[{modelo_nome}] Código bruto:\n{codigo_bruto}\n")
         
         # 3. Defensiva: Validação de Conteúdo
-        if not self.validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
-            print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
-            raise ValueError("A IA não gerou um código Python válido.")
+        if Linguagem.PYTHON.value in linguagem:
+            if not self.validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
+                print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
+                raise ValueError("A IA não gerou um código Python válido.")
+        elif Linguagem.JAVA.value in linguagem:
+            if not self.validar_codigo_java(codigo_limpo) or len(codigo_limpo) < 20:
+                print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
+                raise ValueError("A IA não gerou um código Java válido.")
 
         return codigo_limpo
 
-    def ModeloJaProcessado(self, id_desafio, id_modelo, tipo_codigo):
+    def ModeloJaProcessado(self, id_desafio, id_modelo, tipo_codigo, linguagem):
         """Verifica se já existe um resultado para esse desafio e modelo"""
         resultados = self.repostitory.select_into_table(
             table_name='resultados', 
             campos=['codigo_fonte'], 
-            data={'id_desafio': id_desafio, 'id_modelo': id_modelo, 'tipo': tipo_codigo},
+            data={'id_desafio': id_desafio, 'id_modelo': id_modelo, 'tipo': tipo_codigo, 'linguagem': linguagem},
             size=1
         )
         return len(resultados) > 0 and resultados[0]['codigo_fonte'] is not None and self.validar_codigo_python(resultados[0]['codigo_fonte'])
 
-    def GetPrompt(self, descricao, tipo_codigo):
+    def GetPrompt(self, descricao, tipo_codigo, linguagem):
         """Gera o prompt específico para o tipo de código solicitado"""
         if tipo_codigo == TipoCodigo.BASELINE:
             return (
-                "Você é um programador Python especialista em resolver desafios de algoritmos e"
-                "estruturas de dados. Resolva o seguinte desafio de programação:\n\n"
+                f"Você é um programador {linguagem} especialista em resolver desafios de algoritmos e"
+                f"estruturas de dados. Resolva o seguinte desafio de programação:\n\n"
                 f"DESAFIO: {descricao} \n\n"
                 "Instruções para a saída:\n"
-                "Forneça uma solução completa em Python.\n"
+                f"Forneça uma solução completa em {linguagem}.\n"
                 "Não inclua explicações, comentários introdutórios ou texto adicional.\n"
-                "Sua resposta deve conter APENAS o código-fonte Python e nada mais.\n"
+                f"Sua resposta deve conter APENAS o código-fonte {linguagem} e nada mais.\n"
+            )
+        elif tipo_codigo == TipoCodigo.REFATORADO_SIMPLIFICADO:
+            return (
+                "Como um especialista em engenharia de software, sua tarefa é refatorar o código fornecido abaixo para garantir que ele seja funcionalmente correto e siga as melhores práticas de Clean Code.\n"
+                "Diretrizes de Refatoração (Baseadas em MSR 2025):\n"
+                " * Identifique e importe todas as dependências externas necessárias antes da definição da classe/função.\n"
+                " * Não utilize funções aninhadas; todos os métodos auxiliares devem ser de nível superior ou membros da classe.\n"
+                " * Remova comentários desnecessários, códigos de teste ou redundâncias.\n"
+                " * Garanta que não existam erros de sintaxe ou semântica.\n\n"
+                "Código para Refatoração:"
+                f"\n{descricao}\n\n"
+                "Instruções para a saída:\n" 
+                f"Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código."
             )
         elif tipo_codigo == TipoCodigo.REFATORADO:
             return (
-                "Você é um engenheiro de software sênior especializado em clean code, padrões de projeto e refatoração de software. "
-                "Analise o código Python abaixo, que é uma solução para um desafio de algoritmos. "
-                "Seu objetivo é refatorar este código para melhorar sua qualidade. \n"
-                F"Código para refatorar: \n {descricao}\n\n"
+                "Aqui está um trecho de código original (baseline) desenvolvido para um sistema a solução de um desafio do LeetCode. Sua tarefa é fornecer uma solução de código superior a versão original.\n\n"
+                "Objetivos de Qualidade:\n"
+                "* Redução de Complexidade: Otimize a lógica para alcançar a menor Complexidade Ciclomática e Complexidade Cognitiva possíveis.\n"
+                "* Manutenibilidade: Melhore o Índice de Manutenibilidade (MI) através de uma estrutura mais concisa e elegante.\n"
+                "* Segurança e Robustez: Incorpore tratamento de erros adequado para evitar falhas em tempo de execução e garantir a segurança do código.\n"
+                "* Modernização: Utilize recursos modernos da linguagem {linguagem} para simplificar a implementação, visando reduzir o número de linhas de código (LOC) sem perder a clareza.\n"
+                "Código Original (Baseline):"
+                f"\n{descricao}\n\n"
                 "Instruções para a saída:\n"
-                "Forneça uma solução completa em Python.\n"
-                "Não inclua explicações, comentários introdutórios ou texto adicional.\n"
-                "Sua resposta deve conter APENAS o código-fonte Python e nada mais.\n"
+                f"1. Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código.\n"
+                f"2. Certifique-se de que o código gerado seja funcionalmente correto, seguindo as melhores práticas de desenvolvimento e seja significativamente melhor em termos de qualidade em comparação com o código original."
             )
 
