@@ -137,16 +137,19 @@ class gerador_codigo_llm:
                 f"1. Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código.\n"
                 f"2. Certifique-se de que o código gerado seja funcionalmente correto, seguindo as melhores práticas de desenvolvimento e seja significativamente melhor em termos de qualidade em comparação com o código original."
             )
-    def escrever_resultados_em_json(self, resultados_acumulados, caminho_arquivo):
-        with open(caminho_arquivo, 'w') as f:
-            dados_para_salvar = [r.__dict__ for r in resultados_acumulados]
-            json.dump(dados_para_salvar, f, indent=4)
+    def escrever_resultados_em_json(self, caminho_arquivo, resultados_acumulados):
+        try:
+            with open(caminho_arquivo, 'w') as f:
+                dados_para_salvar = [r.__dict__ for r in resultados_acumulados]
+                json.dump(dados_para_salvar, f, indent=4)
+        except Exception as e:
+            print(f"Erro ao escrever resultados no arquivo JSON: {e}")
 
     def ler_resultados_processados_do_arquivo(self, caminho_arquivo):
         if not os.path.exists(caminho_arquivo):
             print(f"Aviso: Arquivo {caminho_arquivo} não encontrado.")
             return
-
+        resultados_processados = list[Resultado]()
         with open(caminho_arquivo, 'r') as f:
             try:
                 dados = json.load(f)
@@ -159,7 +162,8 @@ class gerador_codigo_llm:
                             codigo_fonte=item['codigo_fonte'],
                             linguagem=item['linguagem']
                         )
-                        self.resultados_processados.append(resultado)
+                        resultados_processados.append(resultado)
             except json.JSONDecodeError:
                 print(f"Erro: O arquivo {caminho_arquivo} está corrompido ou vazio.")
+        return resultados_processados
 

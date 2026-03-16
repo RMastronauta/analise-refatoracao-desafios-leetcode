@@ -59,7 +59,7 @@ class Repository():
             cursor.close()
                 
 
-    def select_into_table(self, table_name, campos=None, data=None, size = 300):
+    def select_into_table(self, table_name, campos=None, data=None, size = 10000):
         self.get_connection()
         cursor = self.conn.cursor(dictionary=True)
         
