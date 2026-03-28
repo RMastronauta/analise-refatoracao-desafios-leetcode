@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 from entity.resultado import Resultado
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -42,51 +43,56 @@ class gerador_codigo_llm:
         return any(term in codigo for term in indicadores)
 
     def extrair_codigo_java(self, texto):
-        """Limpa o Markdown e retorna apenas o conteúdo do bloco de código Java"""
+        """Extrai o código Java ignorando explicações antes ou depois do bloco principal."""
         if "```java" in texto:
             return texto.split("```java")[1].split("```")[0].strip()
         elif "```" in texto:
             return texto.split("```")[1].split("```")[0].strip()
+        
+
+        padrao_inicio = re.search(r'(import\s+|public\s+class\s+|class\s+)', texto)
+        
+        if padrao_inicio:
+            codigo_parcial = texto[padrao_inicio.start():].strip()
+            return codigo_parcial
+            
         return texto.strip()
-    @retry(
-        stop=stop_after_attempt(5), 
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type(Exception)
-    )
+    # @retry(
+    #     stop=stop_after_attempt(1),
+    #     wait=wait_exponential(multiplier=2, min=4, max=20),
+    #     retry=retry_if_exception_type(Exception),
+    #     before_sleep=lambda retry_state: print(f"Aguardando próxima tentativa... (Tentativa {retry_state.attempt_number})")
+    # )
     def solicitar_codigo_llm(self, modelo_nome, prompt_corpo, linguagem):
         """
         Tenta gerar o código. Se a validação falhar, levanta exceção 
         para o @retry tentar novamente (até 5 vezes com espera exponencial).
         """
-        codigo_bruto = ""
-        id_tecnico = llm[modelo_nome.upper()].value
+        try: 
+            codigo_bruto = ""
+            id_tecnico = llm[modelo_nome.upper()].value
+            codigo_bruto = self.llm_request.request_llama(id_tecnico, prompt_corpo)
 
-        llm_request =LLMRequester() 
-
-        if llm.GEMINI.value in id_tecnico:
-            codigo_bruto = llm_request.request_gemini(id_tecnico, prompt_corpo)
-        else:
-            codigo_bruto = llm_request.request_llama(id_tecnico, prompt_corpo)
-
-        # 2. Extração e Limpeza
-        if Linguagem.PYTHON.value in linguagem:
-            codigo_limpo = self.extrair_codigo(codigo_bruto)
-        elif Linguagem.JAVA.value in linguagem:
-            codigo_limpo = self.extrair_codigo_java(codigo_bruto)
+            # 2. Extração e Limpeza
+            if Linguagem.PYTHON.value in linguagem:
+                codigo_limpo = self.extrair_codigo(codigo_bruto)
+            elif Linguagem.JAVA.value in linguagem:
+                codigo_limpo = self.extrair_codigo_java(codigo_bruto)
             
-        print(f"[{modelo_nome}] Código bruto:\n{codigo_bruto}\n")
-        
-        # 3. Defensiva: Validação de Conteúdo
-        if Linguagem.PYTHON.value in linguagem:
-            if not self.validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
-                print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
-                raise ValueError("A IA não gerou um código Python válido.")
-        elif Linguagem.JAVA.value in linguagem:
-            if not self.validar_codigo_java(codigo_limpo) or len(codigo_limpo) < 20:
-                print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
-                raise ValueError("A IA não gerou um código Java válido.")
+            # 3. Defensiva: Validação de Conteúdo
+            if Linguagem.PYTHON.value in linguagem:
+                if not self.validar_codigo_python(codigo_limpo) or len(codigo_limpo) < 20:
+                    print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
+                    raise ValueError("A IA não gerou um código Python válido.")
+            elif Linguagem.JAVA.value in linguagem:
+                if not self.validar_codigo_java(codigo_limpo) or len(codigo_limpo) < 20:
+                    print(f"[{modelo_nome}] Falha na validação. Tentando novamente...")
+                    raise ValueError("A IA não gerou um código Java válido.")
 
-        return codigo_limpo
+            return codigo_limpo
+        except Exception as e:
+            print(f"Erro ao solicitar código do modelo {modelo_nome}: {e}")
+            raise
 
     def ModeloJaProcessado(self, id_desafio, id_modelo, tipo_codigo, linguagem):
         """Verifica se já existe um resultado para esse desafio e modelo"""
@@ -102,7 +108,7 @@ class gerador_codigo_llm:
         """Gera o prompt específico para o tipo de código solicitado"""
         if tipo_codigo == TipoCodigo.BASELINE:
             return (
-                f"Você é um programador {linguagem} especialista em resolver desafios de algoritmos e"
+                f"Você é um programador {linguagem} especialista em resolver desafios de algoritmos e "
                 f"estruturas de dados. Resolva o seguinte desafio de programação:\n\n"
                 f"DESAFIO: {descricao} \n\n"
                 "Instruções para a saída:\n"
@@ -144,6 +150,25 @@ class gerador_codigo_llm:
                 json.dump(dados_para_salvar, f, indent=4)
         except Exception as e:
             print(f"Erro ao escrever resultados no arquivo JSON: {e}")
+    
+    def escrever_prompt_em_json(self, caminho_arquivo, prompt):
+        try:
+            dados = []
+            if os.path.exists(caminho_arquivo):
+                with open(caminho_arquivo, 'r', encoding='utf-8') as f:
+                    try:
+                        dados = json.load(f)
+                        if not isinstance(dados, list):
+                            dados = []
+                    except json.JSONDecodeError:
+                        dados = []
+
+            dados.append(prompt)
+
+            with open(caminho_arquivo, 'w', encoding='utf-8') as f:
+                json.dump(dados, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"Erro ao escrever prompts no arquivo JSON: {e}")
 
     def ler_resultados_processados_do_arquivo(self, caminho_arquivo):
         if not os.path.exists(caminho_arquivo):
