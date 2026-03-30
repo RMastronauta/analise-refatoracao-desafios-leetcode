@@ -118,30 +118,32 @@ class gerador_codigo_llm:
             )
         elif tipo_codigo == TipoCodigo.REFATORADO_SIMPLIFICADO:
             return (
-                "Como um especialista em engenharia de software, sua tarefa é refatorar o código fornecido abaixo para garantir que ele seja funcionalmente correto e siga as melhores práticas de Clean Code.\n"
-                "Diretrizes de Refatoração (Baseadas em MSR 2025):\n"
-                " * Identifique e importe todas as dependências externas necessárias antes da definição da classe/função.\n"
-                " * Não utilize funções aninhadas; todos os métodos auxiliares devem ser de nível superior ou membros da classe.\n"
-                " * Remova comentários desnecessários, códigos de teste ou redundâncias.\n"
-                " * Garanta que não existam erros de sintaxe ou semântica.\n\n"
-                "Código para Refatoração:"
-                f"\n{descricao}\n\n"
-                "Instruções para a saída:\n" 
-                f"Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código."
+                " Como um especialista em engenharia de software, sua tarefa é refatorar o código fornecido abaixo para garantir que ele seja funcionalmente correto e siga as melhores práticas de Clean Code. \n"
+                " Diretrizes de Refatoração (Baseadas em MSR 2025): \n"
+                " * Identifique e importe todas as dependências externas necessárias antes da definição da classe/função. \n"
+                " * Não utilize funções aninhadas; todos os métodos auxiliares devem ser de nível superior ou membros da classe. \n"
+                " * Remova comentários desnecessários, códigos de teste ou redundâncias. \n"
+                " * Garanta que não existam erros de sintaxe ou semântica. \n\n"
+                " Código para Refatoração:"
+                f" \n {descricao} \n\n"
+                " Instruções para a saída: \n" 
+                f" Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código.\n"
+                f" O código não pode conter erros de sintaxe ou semântica e deve ser funcionalmente correto. \n"
             )
         elif tipo_codigo == TipoCodigo.REFATORADO:
             return (
-                "Aqui está um trecho de código original (baseline) desenvolvido para um sistema a solução de um desafio do LeetCode. Sua tarefa é fornecer uma solução de código superior a versão original.\n\n"
-                "Objetivos de Qualidade:\n"
-                "* Redução de Complexidade: Otimize a lógica para alcançar a menor Complexidade Ciclomática e Complexidade Cognitiva possíveis.\n"
-                "* Manutenibilidade: Melhore o Índice de Manutenibilidade (MI) através de uma estrutura mais concisa e elegante.\n"
-                "* Segurança e Robustez: Incorpore tratamento de erros adequado para evitar falhas em tempo de execução e garantir a segurança do código.\n"
-                "* Modernização: Utilize recursos modernos da linguagem {linguagem} para simplificar a implementação, visando reduzir o número de linhas de código (LOC) sem perder a clareza.\n"
-                "Código Original (Baseline):"
-                f"\n{descricao}\n\n"
-                "Instruções para a saída:\n"
-                f"1. Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código.\n"
-                f"2. Certifique-se de que o código gerado seja funcionalmente correto, seguindo as melhores práticas de desenvolvimento e seja significativamente melhor em termos de qualidade em comparação com o código original."
+                "Aqui está um trecho de código original (baseline) desenvolvido para um sistema a solução de um desafio do LeetCode. Sua tarefa é fornecer uma solução de código superior a versão original. \n\n"
+                " Objetivos de Qualidade:\n"
+                " * Redução de Complexidade: Otimize a lógica para alcançar a menor Complexidade Ciclomática e Complexidade Cognitiva possíveis. \n"
+                " * Manutenibilidade: Melhore o Índice de Manutenibilidade (MI) através de uma estrutura mais concisa e elegante. \n"
+                " * Segurança e Robustez: Incorpore tratamento de erros adequado para evitar falhas em tempo de execução e garantir a segurança do código. \n"
+                " * Modernização: Utilize recursos modernos da linguagem {linguagem} para simplificar a implementação, visando reduzir o número de linhas de código (LOC) sem perder a clareza. \n"
+                " Código Original (Baseline):"
+                f" \n {descricao} \n\n"
+                " Instruções para a saída: \n"
+                f" 1. Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código. \n"
+                f" 2. Certifique-se de que o código gerado seja funcionalmente correto, seguindo as melhores práticas de desenvolvimento e seja significativamente melhor em termos de qualidade em comparação com o código original. \n"
+                f" 3. O código não pode conter erros de sintaxe ou semântica e deve ser funcionalmente correto, seguindo as melhores práticas de desenvolvimento."
             )
     def escrever_resultados_em_json(self, caminho_arquivo, resultados_acumulados):
         try:

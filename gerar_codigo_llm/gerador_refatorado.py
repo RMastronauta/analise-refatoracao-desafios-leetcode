@@ -86,6 +86,7 @@ class Gerador_Refatorado:
                     
 
 if __name__ == "__main__":
-    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO_SIMPLIFICADO)
     gerador = Gerador_Refatorado(TipoCodigo.REFATORADO)
+    gerador.processar_refatoracao()
+    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO_SIMPLIFICADO)
     gerador.processar_refatoracao()

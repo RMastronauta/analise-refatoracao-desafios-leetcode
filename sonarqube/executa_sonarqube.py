@@ -39,7 +39,6 @@ class executa_sonarqube:
         # Endpoint da API para buscar medidas específicas
         metrics = "code_smells,sqale_index,complexity,duplicated_lines_density,ncloc"
         url = f"{self.scan_config['sonar_url']}/api/measures/component?component={self.scan_config['project_key']}&metricKeys={metrics}"
-        
         response = requests.get(url, auth=(self.scan_config['sonar_token'], ""))
         return response.json()
 
@@ -53,27 +52,102 @@ class executa_sonarqube:
             'loc': int(metricas.get('ncloc', 0))
         }
         self.repository.update_table(table_name='resultados', data=metricas_db, conditions={'id_resultado': id_resultado})
+
+    def wait_for_sonar_task(self, timeout=60):
+        task_file = ".scannerwork/report-task.txt"
+        start_time = time.time()
+        
+        # 1. Aguarda o arquivo aparecer
+        while not os.path.exists(task_file):
+            if time.time() - start_time > 20:
+                print("  [!] Erro: report-task.txt não gerado.")
+                return False
+            time.sleep(0.5)
+
+        # 2. Extrai a URL com limpeza rigorosa
+        task_url = ""
+        with open(task_file, 'r') as f:
+            for line in f:
+                if 'ceTaskUrl=' in line:
+                    # O strip() remove \n, \r e espaços invisíveis que causam o erro 400
+                    task_url = line.split('ceTaskUrl=')[1].strip()
+                    break
+
+        if not task_url:
+            print("  [!] URL da tarefa não encontrada no arquivo.")
+            return False
+
+        # 3. Polling
+        print(f"  [*] Checando status em: {task_url}")
+        while True:
+            if time.time() - start_time > timeout:
+                print("  [!] Timeout!")
+                return False
+
+            try:
+                # Importante: O Sonar pede o token no campo de 'username' e nada no 'password'
+                response = requests.get(task_url, auth=(self.scan_config['sonar_token'], ""))
+                
+                if response.status_code == 200:
+                    task_data = response.json().get('task', {})
+                    status = task_data.get('status')
+                    
+                    if status == 'SUCCESS':
+                        return True
+                    elif status in ['FAILED', 'CANCELED']:
+                        print(f"  [!] Falha no Sonar: {status}")
+                        return False
+                else:
+                    print(f"  [!] Erro API {response.status_code}: {response.text}")
+                    return False
+                
+                time.sleep(2)
+            except Exception as e:
+                print(f"  [!] Erro de conexão: {e}")
+                return False
     
     def process_sonar(self):
-        resultados = self.repository.select_into_table(table_name= "resultados", campos=["id_resultado", "codigo_fonte", "linguagem"], data={'loc': 0})
-        for resultado in resultados:
-            if resultado['linguagem'] in Linguagem.PYTHON.value:
-                file_path = f"temp_code_{resultado['id_resultado']}.py"
-            elif resultado['linguagem'] in Linguagem.JAVA.value:
-                file_path = f"temp_code_{resultado['id_resultado']}.java"
+        resultados = self.repository.select_into_table(
+            table_name="resultados", 
+            campos=["id_resultado", "codigo_fonte", "linguagem"], 
+            data={'loc': 0},
+            size = 10000
+        )
 
-            with open(file_path, 'w') as f:
-                f.write(resultado['codigo_fonte'])
+        for resultado in resultados:
+            task_file = ".scannerwork/report-task.txt"
+            if os.path.exists(task_file):
+                os.remove(task_file)
+            # Define extensão correta
+            ext = ".py" if "python" in resultado['linguagem'].lower() else ".java"
+            file_path = f"temp_code_{resultado['id_resultado']}{ext}"
+
+            try:
+                # Salva arquivo
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(resultado['codigo_fonte'])
+                
+                # Executa Scanner
+                print(f"Iniciando Scan ID: {resultado['id_resultado']}")
+                self.run_sonar_scanner(file_path)
+
+                # SUBSTITUIÇÃO DO SLEEP: Aguarda o servidor processar de verdade
+                if self.wait_for_sonar_task(timeout=60):
+                    metrics_raw = self.get_sonar_metrics()
+                    
+                    if 'component' in metrics_raw:
+                        metricas_limpas = {m['metric']: m['value'] for m in metrics_raw['component']['measures']}
+                        self.salvar_metricas(resultado['id_resultado'], metricas_limpas)
+                        print(f"Sucesso: {resultado['id_resultado']}")
+                else:
+                    print(f"  [!] Falha ao obter métricas para ID {resultado['id_resultado']}")
+            except Exception as e:
+                print(f"Erro no registro {resultado['id_resultado']}: {e}")
             
-            self.run_sonar_scanner(file_path)
-            time.sleep(5)
-            metrics = self.get_sonar_metrics()
-            metricas_limpas = {m['metric']: m['value'] for m in metrics['component']['measures']}
-            print(f"Métricas para resultado {resultado['id_resultado']}: {metricas_limpas}")
-            self.salvar_metricas(resultado['id_resultado'], metricas_limpas)
-            os.remove(file_path)
+            finally:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
 if __name__ == "__main__":
-
     sonarqube_processor = executa_sonarqube()
     sonarqube_processor.process_sonar()
