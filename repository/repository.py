@@ -117,6 +117,39 @@ class Repository():
         finally:
             cursor.close()
 
+    def getAllResultados(self):
+        self.get_connection()
+        cursor = self.conn.cursor(dictionary=True)
+        
+        try:
+            # Usar aspas triplas (""") é a melhor prática para SQL em Python:
+            # 1. Evita erros de concatenação/espaço
+            # 2. Fica muito mais legível
+            sql = """
+                SELECT 
+                    resultados.tipo, 
+                    resultados.linguagem, 
+                    resultados.complexidade_ciclomatica, 
+                    resultados.divida_tecnica, 
+                    resultados.code_smells, 
+                    resultados.loc,
+                    modelos.nome_modelo as modelo
+                FROM tcc_refatoracao_llm.resultados as resultados
+                JOIN tcc_refatoracao_llm.modelos as modelos 
+                    ON modelos.id_modelo = resultados.id_modelo
+                ORDER BY resultados.id_resultado
+            """
+            
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            return result
+            
+        except mysql.connector.Error as err:
+            print(f"❌ Erro ao selecionar: {err}")
+            return []
+        finally:
+            cursor.close()
+
     def update_table(self, table_name, data, conditions):
         self.get_connection()
         cursor = self.conn.cursor()

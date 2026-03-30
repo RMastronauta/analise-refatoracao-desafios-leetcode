@@ -24,7 +24,7 @@ class Carga_LeetCode:
             response = self.service.get_request(self.api_url, headers=self.headers)
             
             all_problems = response['stat_status_pairs']
-            
+            all_problems.sort(key=lambda x: x['stat']['frontend_question_id'], reverse=True)
             easy, medium, hard = [], [], []
             
             for p in all_problems:
