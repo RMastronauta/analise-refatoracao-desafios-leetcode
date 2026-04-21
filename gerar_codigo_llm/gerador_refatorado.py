@@ -31,15 +31,16 @@ class Gerador_Refatorado:
                 id_modelo=id_modelo,
                 tipo=self.tipo_codigo.value,
                 codigo_fonte=codigo_Java_gerado,
-                linguagem=linguagem)
+                linguagem=linguagem,
+                id_resultado_origem=id_resultado)
         except Exception as e:
             print(f"Falha no modelo {nome_modelo} ({linguagem}): {e}")
             raise
 
     def processar_refatoracao(self):
         try:
-            #resultados = self.repository.select_into_table(table_name= "resultados", campos=["id_resultado", "id_desafio", "id_modelo", "codigo_fonte", "linguagem"], filter="id_resultado not in (1801, 1802, 1803, 1804) and tipo = 'baseline' and codigo_fonte is not null")
-            resultados = self.repository.getResultadosBaselineNaoExecutados(self.tipo_codigo.value, 10000)
+            resultados = self.repository.select_into_table(table_name= "resultados", campos=["id_resultado", "id_desafio", "id_modelo", "codigo_fonte", "linguagem"], filter="tipo = 'baseline_simplificado' and codigo_fonte is not null", size=10000)
+            #resultados = self.repository.getResultadosBaselineNaoExecutados(self.tipo_codigo.value, 10000)
             modelos = self.repository.select_into_table(table_name = "modelos", campos=["id_modelo", "nome_modelo"])
             self.resultados_processados = self.gerador_codigo_llm.ler_resultados_processados_do_arquivo(self.nome_arquivo_json) or list[Resultado]()
             count_arquivo = 1
@@ -86,7 +87,7 @@ class Gerador_Refatorado:
                     
 
 if __name__ == "__main__":
-    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO)
+    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO_ORIGEM_SIMPLIFICADO)
     gerador.processar_refatoracao()
-    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO_SIMPLIFICADO)
+    gerador = Gerador_Refatorado(TipoCodigo.REFATORADO_SIMPLIFICADO_ORIGEM_SIMPLIFICADO)
     gerador.processar_refatoracao()

@@ -106,6 +106,14 @@ class gerador_codigo_llm:
 
     def GetPrompt(self, descricao, tipo_codigo, linguagem):
         """Gera o prompt específico para o tipo de código solicitado"""
+        if tipo_codigo == TipoCodigo.BASELINE_SIMPLIFICADO:
+            return (
+                f"Resolva o seguinte desafio de programação:\n\n "
+                f"DESAFIO: \n\n "
+                f"{descricao} \n\n "
+                "Instruções para a saída:\n "
+                f"Forneça uma solução em {linguagem}.\n "
+            )
         if tipo_codigo == TipoCodigo.BASELINE:
             return (
                 f"Você é um programador {linguagem} especialista em resolver desafios de algoritmos e "
@@ -116,7 +124,7 @@ class gerador_codigo_llm:
                 "Não inclua explicações, comentários introdutórios ou texto adicional.\n"
                 f"Sua resposta deve conter APENAS o código-fonte {linguagem} e nada mais.\n"
             )
-        elif tipo_codigo == TipoCodigo.REFATORADO_SIMPLIFICADO:
+        elif tipo_codigo == TipoCodigo.REFATORADO_SIMPLIFICADO or tipo_codigo == TipoCodigo.REFATORADO_SIMPLIFICADO_ORIGEM_SIMPLIFICADO:
             return (
                 " Como um especialista em engenharia de software, sua tarefa é refatorar o código fornecido abaixo para garantir que ele seja funcionalmente correto e siga as melhores práticas de Clean Code. \n"
                 " Diretrizes de Refatoração (Baseadas em MSR 2025): \n"
@@ -130,7 +138,7 @@ class gerador_codigo_llm:
                 f" Forneça apenas a implementação refatorada em {linguagem} dentro de um bloco de código.\n"
                 f" O código não pode conter erros de sintaxe ou semântica e deve ser funcionalmente correto. \n"
             )
-        elif tipo_codigo == TipoCodigo.REFATORADO:
+        elif tipo_codigo == TipoCodigo.REFATORADO or tipo_codigo == TipoCodigo.REFATORADO_ORIGEM_SIMPLIFICADO:
             return (
                 "Aqui está um trecho de código original (baseline) desenvolvido para um sistema a solução de um desafio do LeetCode. Sua tarefa é fornecer uma solução de código superior a versão original. \n\n"
                 " Objetivos de Qualidade:\n"

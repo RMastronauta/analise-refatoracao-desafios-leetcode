@@ -186,8 +186,8 @@ class Repository():
                 if existing:
                     continue
                 quantidade_inserida += 1
-                sql = f"INSERT INTO resultados (id_desafio, id_modelo, tipo, codigo_fonte, linguagem) VALUES (%s, %s, %s, %s, %s)"
-                values = (resultado.id_desafio, resultado.id_modelo, resultado.tipo, resultado.codigo_fonte, resultado.linguagem)
+                sql = f"INSERT INTO resultados (id_desafio, id_modelo, tipo, codigo_fonte, linguagem, id_resultado_origem) VALUES (%s, %s, %s, %s, %s, %s)"
+                values = (resultado.id_desafio, resultado.id_modelo, resultado.tipo, resultado.codigo_fonte, resultado.linguagem, resultado.id_resultado_origem)
                 cursor.execute(sql, values)
 
             
