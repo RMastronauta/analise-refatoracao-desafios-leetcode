@@ -7,6 +7,7 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
+from enums.tipo_codigo import TipoCodigo
 from repository.repository import Repository
 
 class GeradorGrafico:
@@ -41,7 +42,30 @@ class GeradorGrafico:
     def gerar_todos_os_graficos(self):
         print("Buscando dados atualizados no banco de dados...")
         resultados = self.repository.getAllResultados()
-        df = pd.DataFrame(resultados)
+
+
+        tipos_baseline = {
+            TipoCodigo.BASELINE.value, 
+            TipoCodigo.REFATORADO.value, 
+            TipoCodigo.REFATORADO_SIMPLIFICADO.value
+        }
+
+        tipos_baseline_simplificado = {
+            TipoCodigo.BASELINE_SIMPLIFICADO.value, 
+            TipoCodigo.REFATORADO_ORIGEM_SIMPLIFICADO.value, 
+            TipoCodigo.REFATORADO_SIMPLIFICADO_ORIGEM_SIMPLIFICADO.value
+        }
+        self.processa_imagens(resultados=resultados, tipos=tipos_baseline, nome_complementar_arquivo="baseline")
+        self.processa_imagens(resultados=resultados, tipos=tipos_baseline_simplificado, nome_complementar_arquivo="baseline_simplificado")
+
+
+    def processa_imagens(self, resultados, tipos, nome_complementar_arquivo=""):
+        # Realizando o filtro
+        resultados_filtrados = [
+            x for x in resultados 
+            if x['tipo'] in tipos
+        ]
+        df = pd.DataFrame(resultados_filtrados)
         
         if df.empty:
             print("Erro: O DataFrame está vazio. Verifique a sintaxe SQL e a conexão.")
@@ -49,16 +73,16 @@ class GeradorGrafico:
 
         print(f"Processando {len(df)} registros para visualização final...")
 
-        self.plot_boxplot_complexidade_zoom(df)
-        self.plot_barras_llm_divida_final(df)
-        self.plot_facet_code_smells_final(df)
-        self.plot_scatter_loc_complexidade_densidade(df)
-        self.plot_scatter_loc_complexidade_zoom(df)
-        self.plot_boxplot_loc_zoom(df)
-        
+        self.plot_boxplot_complexidade_zoom(df, nome_complementar_arquivo)
+        self.plot_barras_llm_divida_final(df, nome_complementar_arquivo)
+        self.plot_facet_code_smells_final(df, nome_complementar_arquivo)
+        self.plot_scatter_loc_complexidade_densidade(df, nome_complementar_arquivo)
+        self.plot_scatter_loc_complexidade_zoom(df, nome_complementar_arquivo)
+        self.plot_boxplot_loc_zoom(df, nome_complementar_arquivo)
         print(f"\n✅ Processo concluído! Gráficos salvos na pasta '{self.output_dir}'.")
 
-    def plot_boxplot_complexidade_zoom(self, df):
+
+    def plot_boxplot_complexidade_zoom(self, df, nome_complementar_arquivo=""):
         """Gráfico 1: Impacto da refatoração na Complexidade com Zoom nos dados principais"""
         plt.figure(figsize=(10, 6))
         
@@ -78,9 +102,9 @@ class GeradorGrafico:
         
         plt.ylim(-2, 60) 
         
-        self.salvar_figura('01_boxplot_complexidade_zoom.png')
+        self.salvar_figura(f'01_boxplot_complexidade_zoom{nome_complementar_arquivo}.png')
 
-    def plot_barras_llm_divida_final(self, df):
+    def plot_barras_llm_divida_final(self, df, nome_complementar_arquivo=""):
         """Gráfico 2: Qual LLM gera código com menor dívida técnica média"""
         plt.figure(figsize=(12, 6))
         
@@ -93,9 +117,9 @@ class GeradorGrafico:
         plt.xlabel('LLM')
         
         plt.legend(title='Estratégia', bbox_to_anchor=(1.01, 1), loc='upper left')
-        self.salvar_figura('02_media_divida_tecnica_llm.png')
+        self.salvar_figura(f'02_media_divida_tecnica_llm{nome_complementar_arquivo}.png')
 
-    def plot_facet_code_smells_final(self, df):
+    def plot_facet_code_smells_final(self, df, nome_complementar_arquivo=""):
         """Gráfico 3: Comparação detalhada de Code Smells por Linguagem e Modelo"""
         g = sns.FacetGrid(df, col="linguagem", height=5, aspect=1.2, sharey=True)
         
@@ -107,11 +131,11 @@ class GeradorGrafico:
         plt.subplots_adjust(top=0.80) 
         g.fig.suptitle('Code Smells Médios: Comparativo entre Java e Python', fontsize=16)
         
-        caminho = os.path.join(self.output_dir, '03_facet_code_smells.png')
+        caminho = os.path.join(self.output_dir, f'03_facet_code_smells{nome_complementar_arquivo}.png')
         g.savefig(caminho, dpi=300)
         plt.close()
 
-    def plot_scatter_loc_complexidade_densidade(self, df):
+    def plot_scatter_loc_complexidade_densidade(self, df, nome_complementar_arquivo=""):
         """Gráfico 4: Correlação entre tamanho do código e complexidade com ajuste de densidade"""
         plt.figure(figsize=(10, 7))
         
@@ -131,9 +155,9 @@ class GeradorGrafico:
         plt.grid(True, linestyle=':', alpha=0.6)
         
         
-        self.salvar_figura('04_dispersao_loc_complexidade_densidade.png')
+        self.salvar_figura(f'04_dispersao_loc_complexidade_densidade{nome_complementar_arquivo}.png')
 
-    def plot_scatter_loc_complexidade_zoom(self, df):
+    def plot_scatter_loc_complexidade_zoom(self, df, nome_complementar_arquivo=""):
         """Gráfico 4 (Opção A): Dispersão com Zoom para remover outlier extremo"""
         plt.figure(figsize=(10, 7))
         sns.scatterplot(
@@ -156,9 +180,9 @@ class GeradorGrafico:
         
         plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
         
-        self.salvar_figura('04_dispersao_loc_complexidade_zoom.png')
+        self.salvar_figura(f'04_dispersao_loc_complexidade_zoom{nome_complementar_arquivo}.png')
 
-    def plot_boxplot_loc_zoom(self, df):
+    def plot_boxplot_loc_zoom(self, df, nome_complementar_arquivo=""):
         """Gráfico 5: Verificação do volume de código com Zoom e Médias"""
         plt.figure(figsize=(10, 6))
         
@@ -178,7 +202,7 @@ class GeradorGrafico:
         
         plt.ylim(-5, 150)
         
-        self.salvar_figura('05_boxplot_loc_zoom.png')
+        self.salvar_figura(f'05_boxplot_loc_zoom{nome_complementar_arquivo}.png')
 
 # Execução do script
 if __name__ == "__main__":
